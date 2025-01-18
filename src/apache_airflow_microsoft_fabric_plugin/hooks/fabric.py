@@ -33,10 +33,12 @@ class FabricRunItemStatus:
     CANCELLED = "Cancelled"
     NOT_STARTED = "NotStarted"
     DEDUPED = "Deduped"
+    THROTTLED = "Throttled"
 
     TERMINAL_STATUSES = {CANCELLED, FAILED, COMPLETED}
     INTERMEDIATE_STATES = {IN_PROGRESS}
     FAILURE_STATES = {FAILED, CANCELLED, DEDUPED}
+    THROTTLED_STATES = {THROTTLED}
 
 
 class FabricRunItemException(AirflowException):
@@ -321,7 +323,17 @@ class FabricAsyncHook(FabricHook):
 
                 content_type = response.headers.get('Content-Type', '').lower()
                 if 'application/json' in content_type:
-                    return await response.json()
+                    response_json = await response.json()
+                    # Add throttling limit handling
+                    if response.status == 429:
+                        response_json.update(
+                            {
+                                "status": "Throttled",
+                                "status_code": response.status,
+                                "retry_after": response.headers.get("Retry-After"),
+                            }
+                        )
+                    return response_json
                 elif 'application/octet-stream' in content_type:
                     return response # Returns the raw bytes
                 else:

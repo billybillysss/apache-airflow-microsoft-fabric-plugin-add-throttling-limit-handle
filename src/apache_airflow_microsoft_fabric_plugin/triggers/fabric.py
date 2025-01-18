@@ -81,12 +81,24 @@ class FabricTrigger(BaseTrigger):
                     )
                     return
 
-                self.log.info(
-                    "Sleeping for %s. The item state is %s.",
-                    self.check_interval,
-                    item_run_status,
-                )
-                await asyncio.sleep(self.check_interval)
+                if item_run_status in FabricRunItemStatus.THROTTLED_STATES:
+                    # If the request has reach throttle limit, retry after the seconds from'Retry-After' header
+                    retry_after = int(
+                        item_run_details.get("retry_after", self.check_interval)
+                    )
+                    self.log.info(
+                        "Retry after %s. The request has reach throttle limit.",
+                        retry_after,
+                    )
+                    await asyncio.sleep(retry_after)
+
+                else:
+                    self.log.info(
+                        "Sleeping for %s. The item state is %s.",
+                        self.check_interval,
+                        item_run_status,
+                    )
+                    await asyncio.sleep(self.check_interval)
             # Timeout reached
             yield TriggerEvent(
                 {
